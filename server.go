@@ -392,17 +392,18 @@ func (s *service) call(server *Server, sending *sync.Mutex, wg *sync.WaitGroup, 
 	// Invoke the method, providing a new value for the reply.
 	//returnValues = function.Call([]reflect.Value{argv, replyv})
 
+	var argNumIn = function.Type().NumIn()
 	var sendReplyv = false
-	if function.Type().NumIn() == 0 {
+	if argNumIn == 0 {
 		returnValues = function.Call([]reflect.Value{})
-	} else if function.Type().NumIn() == 1 {
+	} else if argNumIn == 1 {
 		if function.Type().In(0).Kind() != reflect.Ptr {
 			returnValues = function.Call([]reflect.Value{argv})
 		} else {
 			sendReplyv = true
 			returnValues = function.Call([]reflect.Value{replyv})
 		}
-	} else if function.Type().NumIn() == 2 {
+	} else if argNumIn == 2 {
 		sendReplyv = true
 		returnValues = function.Call([]reflect.Value{argv, replyv})
 	} else {
