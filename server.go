@@ -419,7 +419,7 @@ func (s *service) call(server *Server, sending *sync.Mutex, wg *sync.WaitGroup, 
 	if sendReplyv {
 		server.sendResponse(sending, req, replyv.Interface(), codec, errmsg)
 	} else {
-		server.sendResponse(sending, req, nil, codec, errmsg)
+		server.sendResponse(sending, req, "", codec, errmsg)
 	}
 	server.freeRequest(req)
 }
