@@ -37,3 +37,7 @@ easyrpc.Client.Call()//client
 easyrpc.Register(v) //rpc server
 net.Listen("tcp", tcpUrl) //rpc server
 ```
+
+# 搭配easyrpc_discovery使用
+* https://github.com/zhuxiujia/easyrpc_discovery  //基于easyrpc定制微服务发现，支持动态代理，支持GoMybatis事务，AOP代理，事务嵌套，tag定义事务，自带负载均衡算法（随机，加权轮询，源地址哈希法）
+![Image text](https://zhuxiujia.github.io/gomybatis.io/assets/easy_consul.png)
