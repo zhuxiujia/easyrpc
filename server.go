@@ -290,39 +290,46 @@ func suitableMethods(typ reflect.Value, reportErr bool) map[string]*methodType {
 		}
 		mtype := typ.Type().Elem().Field(m).Type
 		mname := typ.Type().Elem().Field(m).Name
+
+		var argType reflect.Type
+		var replyType reflect.Type
 		// Method must be exported.
 		//if method.Type().PkgPath() != "" {
 		//	continue
 		//}
 		// Method needs three ins: receiver, *args, *reply.
-		if mtype.NumIn() != 2 {
+		if mtype.NumIn() > 2 {
 			if reportErr {
-				log.Printf("easyrpc.Register: method %q has %d input parameters; needs exactly three\n", mname, mtype.NumIn())
+				log.Printf("easyrpc.Register: method %q has %d input parameters; needs exactly 2\n", mname, mtype.NumIn())
 			}
 			continue
 		}
 		// First arg need not be a pointer.
-		argType := mtype.In(0)
-		if !isExportedOrBuiltinType(argType) {
-			if reportErr {
-				log.Printf("easyrpc.Register: argument type of method %q is not exported: %q\n", mname, argType)
+		if mtype.NumIn() > 0 {
+			argType = mtype.In(0)
+			if !isExportedOrBuiltinType(argType) {
+				if reportErr {
+					log.Printf("easyrpc.Register: argument type of method %q is not exported: %q\n", mname, argType)
+				}
+				continue
 			}
-			continue
 		}
 		// Second arg must be a pointer.
-		replyType := mtype.In(1)
-		if replyType.Kind() != reflect.Ptr {
-			if reportErr {
-				log.Printf("easyrpc.Register: reply type of method %q is not a pointer: %q\n", mname, replyType)
+		if mtype.NumIn() > 1 {
+			replyType = mtype.In(1)
+			if replyType.Kind() != reflect.Ptr {
+				if reportErr {
+					log.Printf("easyrpc.Register: reply type of method %q is not a pointer: %q\n", mname, replyType)
+				}
+				continue
 			}
-			continue
-		}
-		// Reply type must be exported.
-		if !isExportedOrBuiltinType(replyType) {
-			if reportErr {
-				log.Printf("easyrpc.Register: reply type of method %q is not exported: %q\n", mname, replyType)
+			// Reply type must be exported.
+			if !isExportedOrBuiltinType(replyType) {
+				if reportErr {
+					log.Printf("easyrpc.Register: reply type of method %q is not exported: %q\n", mname, replyType)
+				}
+				continue
 			}
-			continue
 		}
 		// Method needs one out.
 		if mtype.NumOut() != 1 {
@@ -381,15 +388,38 @@ func (s *service) call(server *Server, sending *sync.Mutex, wg *sync.WaitGroup, 
 	mtype.numCalls++
 	mtype.Unlock()
 	function := mtype.method
+	var returnValues []reflect.Value
 	// Invoke the method, providing a new value for the reply.
-	returnValues := function.Call([]reflect.Value{argv, replyv})
+	//returnValues = function.Call([]reflect.Value{argv, replyv})
+
+	var sendReplyv = false
+	if function.Type().NumIn() == 0 {
+		returnValues = function.Call([]reflect.Value{})
+	} else if function.Type().NumIn() == 1 {
+		if function.Type().In(0).Kind() != reflect.Ptr {
+			returnValues = function.Call([]reflect.Value{argv})
+		} else {
+			sendReplyv = true
+			returnValues = function.Call([]reflect.Value{replyv})
+		}
+	} else if function.Type().NumIn() == 2 {
+		sendReplyv = true
+		returnValues = function.Call([]reflect.Value{argv, replyv})
+	} else {
+		panic("easyrepc not support arg num > 2 !")
+	}
+
 	// The return value for the method is an error.
 	errInter := returnValues[0].Interface()
 	errmsg := ""
 	if errInter != nil {
 		errmsg = errInter.(error).Error()
 	}
-	server.sendResponse(sending, req, replyv.Interface(), codec, errmsg)
+	if sendReplyv {
+		server.sendResponse(sending, req, replyv.Interface(), codec, errmsg)
+	} else {
+		server.sendResponse(sending, req, nil, codec, errmsg)
+	}
 	server.freeRequest(req)
 }
 
@@ -560,27 +590,31 @@ func (server *Server) readRequest(codec ServerCodec) (service *service, mtype *m
 
 	// Decode the argument value.
 	argIsValue := false // if true, need to indirect before calling.
-	if mtype.ArgType.Kind() == reflect.Ptr {
-		argv = reflect.New(mtype.ArgType.Elem())
-	} else {
-		argv = reflect.New(mtype.ArgType)
-		argIsValue = true
-	}
-	// argv guaranteed to be a pointer now.
-	if err = codec.ReadRequestBody(argv.Interface()); err != nil {
-		return
-	}
-	if argIsValue {
-		argv = argv.Elem()
-	}
 
-	replyv = reflect.New(mtype.ReplyType.Elem())
+	if mtype.ArgType != nil {
+		if mtype.ArgType.Kind() == reflect.Ptr {
+			argv = reflect.New(mtype.ArgType.Elem())
+		} else {
+			argv = reflect.New(mtype.ArgType)
+			argIsValue = true
+		}
+		// argv guaranteed to be a pointer now.
+		if err = codec.ReadRequestBody(argv.Interface()); err != nil {
+			return
+		}
+		if argIsValue {
+			argv = argv.Elem()
+		}
+	}
+	if mtype.ReplyType != nil {
+		replyv = reflect.New(mtype.ReplyType.Elem())
 
-	switch mtype.ReplyType.Elem().Kind() {
-	case reflect.Map:
-		replyv.Elem().Set(reflect.MakeMap(mtype.ReplyType.Elem()))
-	case reflect.Slice:
-		replyv.Elem().Set(reflect.MakeSlice(mtype.ReplyType.Elem(), 0, 0))
+		switch mtype.ReplyType.Elem().Kind() {
+		case reflect.Map:
+			replyv.Elem().Set(reflect.MakeMap(mtype.ReplyType.Elem()))
+		case reflect.Slice:
+			replyv.Elem().Set(reflect.MakeSlice(mtype.ReplyType.Elem(), 0, 0))
+		}
 	}
 	return
 }
