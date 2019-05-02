@@ -23,3 +23,12 @@ type Service struct{
  Method func() error
 }
 ``` 
+# 使用方法
+
+```
+//和go标准库的rpc以及jsonrpc使用方法完全一样,只需把rpc.* 和jsonrpc.* 改成 easyrpc.* 和 easy_jsonrpc.*
+easyrpc.Client.Call()//client
+
+easyrpc.Register(v) //rpc server
+net.Listen("tcp", tcpUrl) //rpc server
+```
