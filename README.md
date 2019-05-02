@@ -26,6 +26,8 @@ type Service struct{
 # 使用方法
 
 ```
+//下载，cmd或者终端执行命令 go get github.com/zhuxiujia/easyrpc
+
 //和go标准库的rpc以及jsonrpc使用方法完全一样,只需把rpc.* 和jsonrpc.* 改成 easyrpc.* 和 easy_jsonrpc.*
 easyrpc.Client.Call()//client
 
