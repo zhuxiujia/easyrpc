@@ -274,7 +274,7 @@ func (server *Server) register(rcvr interface{}, name string, useName bool) erro
 	}
 
 	if _, dup := server.serviceMap.LoadOrStore(sname, s); dup {
-		return errors.New("rpc: service already defined: " + sname)
+		return errors.New("easyrpc: service already defined: " + sname)
 	}
 	return nil
 }
@@ -367,7 +367,7 @@ func (server *Server) sendResponse(sending *sync.Mutex, req *Request, reply inte
 	sending.Lock()
 	err := codec.WriteResponse(resp, reply)
 	if debugLog && err != nil {
-		log.Println("rpc: writing response:", err)
+		log.Println("easyrpc: writing response:", err)
 	}
 	sending.Unlock()
 	server.freeResponse(resp)
@@ -445,7 +445,7 @@ func (c *gobServerCodec) WriteResponse(r *Response, body interface{}) (err error
 		if c.encBuf.Flush() == nil {
 			// Gob couldn't encode the header. Should not happen, so if it does,
 			// shut down the connection to signal that the connection is broken.
-			log.Println("rpc: gob error encoding response:", err)
+			log.Println("easyrpc: gob error encoding response:", err)
 			c.Close()
 		}
 		return
@@ -454,7 +454,7 @@ func (c *gobServerCodec) WriteResponse(r *Response, body interface{}) (err error
 		if c.encBuf.Flush() == nil {
 			// Was a gob problem encoding the body but the header has been written.
 			// Shut down the connection to signal that the connection is broken.
-			log.Println("rpc: gob error encoding body:", err)
+			log.Println("easyrpc: gob error encoding body:", err)
 			c.Close()
 		}
 		return
@@ -497,7 +497,7 @@ func (server *Server) ServeCodec(codec ServerCodec) {
 		service, mtype, req, argv, replyv, keepReading, err := server.readRequest(codec)
 		if err != nil {
 			if debugLog && err != io.EOF {
-				log.Println("rpc:", err)
+				log.Println("easyrpc:", err)
 			}
 			if !keepReading {
 				break
@@ -629,7 +629,7 @@ func (server *Server) readRequestHeader(codec ServerCodec) (svc *service, mtype 
 		if err == io.EOF || err == io.ErrUnexpectedEOF {
 			return
 		}
-		err = errors.New("rpc: server cannot decode request: " + err.Error())
+		err = errors.New("easyrpc: server cannot decode request: " + err.Error())
 		return
 	}
 
@@ -639,7 +639,7 @@ func (server *Server) readRequestHeader(codec ServerCodec) (svc *service, mtype 
 
 	dot := strings.LastIndex(req.ServiceMethod, ".")
 	if dot < 0 {
-		err = errors.New("rpc: service/method request ill-formed: " + req.ServiceMethod)
+		err = errors.New("easyrpc: service/method request ill-formed: " + req.ServiceMethod)
 		return
 	}
 	serviceName := req.ServiceMethod[:dot]
@@ -648,13 +648,13 @@ func (server *Server) readRequestHeader(codec ServerCodec) (svc *service, mtype 
 	// Look up the request.
 	svci, ok := server.serviceMap.Load(serviceName)
 	if !ok {
-		err = errors.New("rpc: can't find service " + req.ServiceMethod)
+		err = errors.New("easyrpc: can't find service " + req.ServiceMethod)
 		return
 	}
 	svc = svci.(*service)
 	mtype = svc.method[methodName]
 	if mtype == nil {
-		err = errors.New("rpc: can't find method " + req.ServiceMethod)
+		err = errors.New("easyrpc: can't find method " + req.ServiceMethod)
 	}
 	return
 }

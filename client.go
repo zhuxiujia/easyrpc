@@ -164,7 +164,7 @@ func (client *Client) input() {
 	client.mutex.Unlock()
 	client.reqMutex.Unlock()
 	if debugLog && err != io.EOF && !closing {
-		log.Println("rpc: client protocol error:", err)
+		log.Println("easyrpc: client protocol error:", err)
 	}
 }
 
@@ -176,7 +176,7 @@ func (call *Call) done() {
 		// We don't want to block here. It is the caller's responsibility to make
 		// sure the channel has enough buffer space. See comment in Go().
 		if debugLog {
-			log.Println("rpc: discarding Call reply due to insufficient Done chan capacity")
+			log.Println("easyrpc: discarding Call reply due to insufficient Done chan capacity")
 		}
 	}
 }
@@ -309,7 +309,7 @@ func (client *Client) Go(serviceMethod string, args interface{}, reply interface
 		// RPCs that will be using that channel. If the channel
 		// is totally unbuffered, it's best not to run at all.
 		if cap(done) == 0 {
-			log.Panic("rpc: done channel is unbuffered")
+			log.Panic("easyrpc: done channel is unbuffered")
 		}
 	}
 	call.Done = done
