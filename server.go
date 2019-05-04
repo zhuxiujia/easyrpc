@@ -157,6 +157,7 @@ type methodType struct {
 	ArgType    reflect.Type
 	ReplyType  reflect.Type
 	numCalls   uint
+	DeferFunc  func(recover interface{}) string
 }
 
 type service struct {
@@ -218,6 +219,10 @@ func isExportedOrBuiltinType(t reflect.Type) bool {
 	return isExported(t.Name()) || t.PkgPath() == ""
 }
 
+func (server *Server) RegisterDefer(rcvr interface{}, deferFunc func(arg interface{}) string) error {
+	return server.register(rcvr, "", false, deferFunc)
+}
+
 // Register publishes in the server the set of methods of the
 // receiver value that satisfy the following conditions:
 //	- exported method of exported type
@@ -229,16 +234,16 @@ func isExportedOrBuiltinType(t reflect.Type) bool {
 // The client accesses each method using a string of the form "Type.Method",
 // where Type is the receiver's concrete type.
 func (server *Server) Register(rcvr interface{}) error {
-	return server.register(rcvr, "", false)
+	return server.register(rcvr, "", false, nil)
 }
 
 // RegisterName is like Register but uses the provided name for the type
 // instead of the receiver's concrete type.
 func (server *Server) RegisterName(name string, rcvr interface{}) error {
-	return server.register(rcvr, name, true)
+	return server.register(rcvr, name, true, nil)
 }
 
-func (server *Server) register(rcvr interface{}, name string, useName bool) error {
+func (server *Server) register(rcvr interface{}, name string, useName bool, deferFunc func(arg interface{}) string) error {
 	s := new(service)
 	s.typ = reflect.TypeOf(rcvr)
 	s.rcvr = reflect.ValueOf(rcvr)
@@ -258,12 +263,12 @@ func (server *Server) register(rcvr interface{}, name string, useName bool) erro
 	}
 	s.name = sname
 	// Install the methods
-	s.method = suitableMethods(s.rcvr, true)
+	s.method = suitableMethods(s.rcvr, true, deferFunc)
 
 	if len(s.method) == 0 {
 		str := ""
 		// To help the user, see if a pointer receiver would work.
-		method := suitableMethods(s.rcvr, false)
+		method := suitableMethods(s.rcvr, false, deferFunc)
 		if len(method) != 0 {
 			str = "easyrpc.Register: type " + sname + " has no exported methods of suitable type (hint: pass a pointer to value of that type)"
 		} else {
@@ -281,7 +286,7 @@ func (server *Server) register(rcvr interface{}, name string, useName bool) erro
 
 // suitableMethods returns suitable Rpc methods of typ, it will report
 // error using log if reportErr is true.
-func suitableMethods(typ reflect.Value, reportErr bool) map[string]*methodType {
+func suitableMethods(typ reflect.Value, reportErr bool, deferFunc func(arg interface{}) string) map[string]*methodType {
 	methods := make(map[string]*methodType)
 	for m := 0; m < typ.Elem().NumField(); m++ {
 		method := typ.Elem().Field(m)
@@ -345,7 +350,8 @@ func suitableMethods(typ reflect.Value, reportErr bool) map[string]*methodType {
 			}
 			continue
 		}
-		methods[mname] = &methodType{method: method, ArgType: argType, ReplyType: replyType}
+
+		methods[mname] = &methodType{method: method, ArgType: argType, ReplyType: replyType, DeferFunc: deferFunc}
 	}
 	return methods
 }
@@ -391,6 +397,14 @@ func (s *service) call(server *Server, sending *sync.Mutex, wg *sync.WaitGroup, 
 	var returnValues []reflect.Value
 	// Invoke the method, providing a new value for the reply.
 	//returnValues = function.Call([]reflect.Value{argv, replyv})
+
+	if mtype.DeferFunc != nil {
+		defer func() {
+			err := recover()
+			server.sendResponse(sending, req, "", codec, mtype.DeferFunc(err))
+			server.freeRequest(req)
+		}()
+	}
 
 	var argNumIn = function.Type().NumIn()
 	var sendReplyv = false
@@ -676,6 +690,10 @@ func (server *Server) Accept(lis net.Listener) {
 
 // Register publishes the receiver's methods in the DefaultServer.
 func Register(rcvr interface{}) error { return DefaultServer.Register(rcvr) }
+
+func RegisterDefer(rcvr interface{}, deferFunc func(recover interface{}) string) error {
+	return DefaultServer.RegisterDefer(rcvr, deferFunc)
+}
 
 // RegisterName is like Register but uses the provided name for the type
 // instead of the receiver's concrete type.
