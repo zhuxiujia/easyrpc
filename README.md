@@ -1,6 +1,7 @@
 
 
 #EasyRPC 基于go标准库rpc框架修改而来
+* 基于标准库rpc库修改而来,稳定,高性能,扩展性好
 * 标准库默认使用func (* Type)Method(arg,*result) error 的模式,EasyRpc 则把方法移动到结构体里（方便动态代理和Aop以及各种扩展和定制）
 * easyrpc同时支持 无参数，无返回值，或只有参数，只有返回值
 * 支持注册defer函数  easyrpc.RegisterDefer(v,deferFunc) ，防止服务因为不可预知 painc 问题导致程序退出。defer函数可处理问题然后把错误发送还给客户端
