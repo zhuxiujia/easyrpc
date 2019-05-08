@@ -393,13 +393,11 @@ func (s *service) call(server *Server, sending *sync.Mutex, wg *sync.WaitGroup, 
 	mtype.Lock()
 	mtype.numCalls++
 	mtype.Unlock()
-	function := mtype.method
-	var returnValues []reflect.Value
-	doCall(server, sending, wg, mtype, req, argv, replyv, codec, function, &returnValues)
+	doCall(server, sending, wg, mtype, req, argv, replyv, codec)
 	server.freeRequest(req)
 }
 
-func doCall(server *Server, sending *sync.Mutex, wg *sync.WaitGroup, mtype *methodType, req *Request, argv, replyv reflect.Value, codec ServerCodec, function reflect.Value, returnValues *[]reflect.Value) {
+func doCall(server *Server, sending *sync.Mutex, wg *sync.WaitGroup, mtype *methodType, req *Request, argv, replyv reflect.Value, codec ServerCodec) {
 	if mtype.DeferFunc != nil {
 		defer func() {
 			err := recover()
@@ -409,26 +407,29 @@ func doCall(server *Server, sending *sync.Mutex, wg *sync.WaitGroup, mtype *meth
 		}()
 	}
 
+	function := mtype.method
+	var returnValues []reflect.Value
+
 	var argNumIn = function.Type().NumIn()
 	var sendReplyv = false
 	if argNumIn == 0 {
-		*returnValues = function.Call([]reflect.Value{})
+		returnValues = function.Call([]reflect.Value{})
 	} else if argNumIn == 1 {
 		if function.Type().In(0).Kind() != reflect.Ptr {
-			*returnValues = function.Call([]reflect.Value{argv})
+			returnValues = function.Call([]reflect.Value{argv})
 		} else {
 			sendReplyv = true
-			*returnValues = function.Call([]reflect.Value{replyv})
+			returnValues = function.Call([]reflect.Value{replyv})
 		}
 	} else if argNumIn == 2 {
 		sendReplyv = true
-		*returnValues = function.Call([]reflect.Value{argv, replyv})
+		returnValues = function.Call([]reflect.Value{argv, replyv})
 	} else {
 		panic("easyrepc not support arg num > 2 !")
 	}
 
 	// The return value for the method is an error.
-	errInter := (*returnValues)[0].Interface()
+	errInter := returnValues[0].Interface()
 	errmsg := ""
 	if errInter != nil {
 		errmsg = errInter.(error).Error()
