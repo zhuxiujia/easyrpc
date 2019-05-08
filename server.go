@@ -395,37 +395,40 @@ func (s *service) call(server *Server, sending *sync.Mutex, wg *sync.WaitGroup, 
 	mtype.Unlock()
 	function := mtype.method
 	var returnValues []reflect.Value
-	// Invoke the method, providing a new value for the reply.
-	//returnValues = function.Call([]reflect.Value{argv, replyv})
+	doCall(server, sending, wg, mtype, req, argv, replyv, codec, function, &returnValues)
+	server.freeRequest(req)
+}
 
+func doCall(server *Server, sending *sync.Mutex, wg *sync.WaitGroup, mtype *methodType, req *Request, argv, replyv reflect.Value, codec ServerCodec, function reflect.Value, returnValues *[]reflect.Value) {
 	if mtype.DeferFunc != nil {
 		defer func() {
 			err := recover()
-			server.sendResponse(sending, req, "", codec, mtype.DeferFunc(err))
-			server.freeRequest(req)
+			if err != nil {
+				server.sendResponse(sending, req, "", codec, mtype.DeferFunc(err))
+			}
 		}()
 	}
 
 	var argNumIn = function.Type().NumIn()
 	var sendReplyv = false
 	if argNumIn == 0 {
-		returnValues = function.Call([]reflect.Value{})
+		*returnValues = function.Call([]reflect.Value{})
 	} else if argNumIn == 1 {
 		if function.Type().In(0).Kind() != reflect.Ptr {
-			returnValues = function.Call([]reflect.Value{argv})
+			*returnValues = function.Call([]reflect.Value{argv})
 		} else {
 			sendReplyv = true
-			returnValues = function.Call([]reflect.Value{replyv})
+			*returnValues = function.Call([]reflect.Value{replyv})
 		}
 	} else if argNumIn == 2 {
 		sendReplyv = true
-		returnValues = function.Call([]reflect.Value{argv, replyv})
+		*returnValues = function.Call([]reflect.Value{argv, replyv})
 	} else {
 		panic("easyrepc not support arg num > 2 !")
 	}
 
 	// The return value for the method is an error.
-	errInter := returnValues[0].Interface()
+	errInter := (*returnValues)[0].Interface()
 	errmsg := ""
 	if errInter != nil {
 		errmsg = errInter.(error).Error()
@@ -435,7 +438,6 @@ func (s *service) call(server *Server, sending *sync.Mutex, wg *sync.WaitGroup, 
 	} else {
 		server.sendResponse(sending, req, "", codec, errmsg)
 	}
-	server.freeRequest(req)
 }
 
 type gobServerCodec struct {
