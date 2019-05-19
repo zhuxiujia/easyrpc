@@ -622,16 +622,6 @@ func (server *Server) readRequest(codec ServerCodec) (service *service, mtype *m
 			argv = argv.Elem()
 		}
 	}
-	if mtype.ReplyType != nil {
-		var replyType = mtype.ReplyType
-		replyv = reflect.New(replyType)
-		switch replyType.Kind() {
-		case reflect.Map:
-			replyv.Elem().Set(reflect.MakeMap(replyType))
-		case reflect.Slice:
-			replyv.Elem().Set(reflect.MakeSlice(replyType, 0, 0))
-		}
-	}
 	return
 }
 
