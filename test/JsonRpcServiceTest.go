@@ -39,8 +39,12 @@ func main() {
 	defer utils.CountMethodTps(float64(total), time.Now(), "ZmicroRpcClient")
 	var ret = TestVO{}
 	for i := 0; i < total; i++ {
-		c.Call("Rect.Area", &Params{50, 100}, &ret)
-		fmt.Println(ret.Name)
+		var e = c.Call("Rect.Area", &Params{50, 100}, &ret)
+		if e != nil {
+			fmt.Println(e.Error())
+		} else {
+			fmt.Println(ret.Name)
+		}
 	}
 }
 func serverce() {

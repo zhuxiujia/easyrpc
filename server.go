@@ -415,24 +415,16 @@ func doCall(server *Server, sending *sync.Mutex, wg *sync.WaitGroup, mtype *meth
 	function := mtype.method
 	var returnValues []reflect.Value
 
-	var argNumIn = function.Type().NumIn()
 	var sendReplyv = false
-	if argNumIn == 0 {
-		returnValues = function.Call([]reflect.Value{})
-	} else if argNumIn == 1 {
-		if function.Type().In(0).Kind() != reflect.Ptr {
-			returnValues = function.Call([]reflect.Value{argv})
-		} else {
-			sendReplyv = true
-			returnValues = function.Call([]reflect.Value{replyv})
-		}
-	} else if argNumIn == 2 {
-		sendReplyv = true
-		returnValues = function.Call([]reflect.Value{argv, replyv})
+	if function.Type().NumIn() == 1 {
+		returnValues = function.Call([]reflect.Value{argv})
 	} else {
-		panic("easyrepc not support arg num > 2 !")
+		returnValues = function.Call([]reflect.Value{})
 	}
-
+	if mtype.ReplyTypeNum != -1 {
+		sendReplyv = true
+		replyv = returnValues[mtype.ReplyTypeNum]
+	}
 	// The return value for the method is an error.
 	errInter := returnValues[mtype.ErrorTypeNum].Interface()
 	errmsg := ""
@@ -440,7 +432,8 @@ func doCall(server *Server, sending *sync.Mutex, wg *sync.WaitGroup, mtype *meth
 		errmsg = errInter.(error).Error()
 	}
 	if sendReplyv {
-		server.sendResponse(sending, req, replyv.Interface(), codec, errmsg)
+		var result = replyv.Interface()
+		server.sendResponse(sending, req, result, codec, errmsg)
 	} else {
 		server.sendResponse(sending, req, "", codec, errmsg)
 	}
