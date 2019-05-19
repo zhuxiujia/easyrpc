@@ -152,12 +152,14 @@ const (
 var typeOfError = reflect.TypeOf((*error)(nil)).Elem()
 
 type methodType struct {
-	sync.Mutex // protects counters
-	method     reflect.Value
-	ArgType    reflect.Type
-	ReplyType  reflect.Type
-	numCalls   uint
-	DeferFunc  func(recover interface{}) string
+	sync.Mutex   // protects counters
+	method       reflect.Value
+	ArgType      reflect.Type
+	ReplyType    reflect.Type
+	ErrorTypeNum int
+	ReplyTypeNum int
+	numCalls     uint
+	DeferFunc    func(recover interface{}) string
 }
 
 type service struct {
@@ -319,39 +321,42 @@ func suitableMethods(typ reflect.Value, reportErr bool, deferFunc func(arg inter
 				continue
 			}
 		}
+		var errorTypeNum = 0
+		var replyTypeNum = -1
 		// Second arg must be a pointer.
-		if mtype.NumIn() > 1 {
-			replyType = mtype.In(1)
-			if replyType.Kind() != reflect.Ptr {
-				if reportErr {
-					log.Printf("easyrpc.Register: reply type of method %q is not a pointer: %q\n", mname, replyType)
-				}
-				continue
+		if mtype.NumOut() > 1 {
+			if mtype.Out(0) == typeOfError {
+				errorTypeNum = 0
+			} else if mtype.NumOut() == 2 && mtype.Out(1) == typeOfError {
+				errorTypeNum = 1
+			} else {
+				panic("must have a error type")
 			}
-			// Reply type must be exported.
-			if !isExportedOrBuiltinType(replyType) {
-				if reportErr {
-					log.Printf("easyrpc.Register: reply type of method %q is not exported: %q\n", mname, replyType)
+			if mtype.Out(0).Kind() != reflect.Interface {
+				replyType = mtype.Out(0)
+				replyTypeNum = 0
+			} else if mtype.NumOut() == 2 && mtype.Out(1).Kind() != reflect.Interface {
+				replyType = mtype.Out(1)
+				replyTypeNum = 1
+			}
+			if replyType != nil {
+				// Reply type must be exported.
+				if !isExportedOrBuiltinType(replyType) {
+					if reportErr {
+						log.Printf("easyrpc.Register: reply type of method %q is not exported: %q\n", mname, replyType)
+					}
+					continue
 				}
-				continue
 			}
 		}
 		// Method needs one out.
-		if mtype.NumOut() != 1 {
+		if mtype.NumOut() <= 0 {
 			if reportErr {
-				log.Printf("easyrpc.Register: method %q has %d output parameters; needs exactly one\n", mname, mtype.NumOut())
+				log.Printf("easyrpc.Register: method %q has %d output parameters; needs exactly one error!\n", mname, mtype.NumOut())
 			}
 			continue
 		}
-		// The return type of the method must be error.
-		if returnType := mtype.Out(0); returnType != typeOfError {
-			if reportErr {
-				log.Printf("easyrpc.Register: return type of method %q is %q, must be error\n", mname, returnType)
-			}
-			continue
-		}
-
-		methods[mname] = &methodType{method: method, ArgType: argType, ReplyType: replyType, DeferFunc: deferFunc}
+		methods[mname] = &methodType{method: method, ArgType: argType, ReplyType: replyType, DeferFunc: deferFunc, ErrorTypeNum: errorTypeNum, ReplyTypeNum: replyTypeNum}
 	}
 	return methods
 }
@@ -429,7 +434,7 @@ func doCall(server *Server, sending *sync.Mutex, wg *sync.WaitGroup, mtype *meth
 	}
 
 	// The return value for the method is an error.
-	errInter := returnValues[0].Interface()
+	errInter := returnValues[mtype.ErrorTypeNum].Interface()
 	errmsg := ""
 	if errInter != nil {
 		errmsg = errInter.(error).Error()
@@ -625,13 +630,13 @@ func (server *Server) readRequest(codec ServerCodec) (service *service, mtype *m
 		}
 	}
 	if mtype.ReplyType != nil {
-		replyv = reflect.New(mtype.ReplyType.Elem())
-
-		switch mtype.ReplyType.Elem().Kind() {
+		var replyType = mtype.ReplyType
+		replyv = reflect.New(replyType)
+		switch replyType.Kind() {
 		case reflect.Map:
-			replyv.Elem().Set(reflect.MakeMap(mtype.ReplyType.Elem()))
+			replyv.Elem().Set(reflect.MakeMap(replyType))
 		case reflect.Slice:
-			replyv.Elem().Set(reflect.MakeSlice(mtype.ReplyType.Elem(), 0, 0))
+			replyv.Elem().Set(reflect.MakeSlice(replyType, 0, 0))
 		}
 	}
 	return

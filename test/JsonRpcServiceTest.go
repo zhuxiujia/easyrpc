@@ -21,14 +21,8 @@ type Params struct {
 }
 
 type Rect struct {
-	Area func(p Params, ret *TestVO) error
+	Area func(p Params) (TestVO, error)
 }
-
-//func (r *Rect) Area(p *Params, ret *int) error {
-//	*ret = p.Width + p.Height
-//	println("do")
-//	return nil
-//}
 
 func main() {
 	go serverce()
@@ -51,13 +45,11 @@ func main() {
 }
 func serverce() {
 	rect := new(Rect)
-	rect.Area = func(p Params, ret *TestVO) error {
+	rect.Area = func(p Params) (TestVO, error) {
 		var t = TestVO{
 			Name: "sdafasdf",
 		}
-		*ret = t
-		println("do")
-		return nil
+		return t, nil
 	}
 	//注册rpc服务
 	easyrpc.Register(rect)
