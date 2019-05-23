@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"github.com/zhuxiujia/easyrpc"
-	"go-p2p/platform-common/src/com/platform/common/utils"
 	"log"
 	"net"
 	"time"
@@ -21,7 +20,7 @@ type Params struct {
 }
 
 type Rect struct {
-	Area func(p Params, ret *TestVO) error
+	Area func(p Params, ret *[]string) error
 }
 
 //func (r *Rect) Area(p *Params, ret *int) error {
@@ -42,20 +41,17 @@ func main() {
 	time.Sleep(time.Second)
 
 	var total = 10
-	defer utils.CountMethodTps(float64(total), time.Now(), "ZmicroRpcClient")
-	var ret = TestVO{}
+	//defer utils.CountMethodTps(float64(total), time.Now(), "ZmicroRpcClient")
+	var ret []string
 	for i := 0; i < total; i++ {
 		c.Call("Rect.Area", &Params{50, 100}, &ret)
-		fmt.Println(ret.Name)
+		fmt.Println(ret[0])
 	}
 }
 func serverce() {
 	rect := new(Rect)
-	rect.Area = func(p Params, ret *TestVO) error {
-		var t = TestVO{
-			Name: "sdafasdf",
-		}
-		*ret = t
+	rect.Area = func(p Params, ret *[]string) error {
+		*ret = []string{"dfsa"}
 		println("do")
 		return nil
 	}
